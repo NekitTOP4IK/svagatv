@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        android:title="@string/svaga_account_category"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            android:key="svaga_account_status"
+            android:summary="@string/svaga_account_disconnected_summary"
+            android:title="@string/svaga_account_connect"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="svaga_paste_token"
+            android:title="@string/svaga_paste_token_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="svaga_account_logout"
+            android:title="@string/svaga_account_logout"
+            app:iconSpaceReserved="false"
+            app:isPreferenceVisible="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/svaga_features_category"
+        app:iconSpaceReserved="false">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="svaga_badges_enabled"
+            android:summary="@string/svaga_badges_enabled_summary"
+            android:title="@string/svaga_badges_enabled_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="svaga_styles_enabled"
+            android:summary="@string/svaga_styles_enabled_summary"
+            android:title="@string/svaga_styles_enabled_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="svaga_social_rating_enabled"
+            android:summary="@string/svaga_social_rating_summary"
+            android:title="@string/svaga_social_rating_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="svaga_aliases_enabled"
+            android:summary="@string/svaga_aliases_summary"
+            android:title="@string/svaga_aliases_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:key="svaga_manage_aliases"
+            android:title="@string/svaga_manage_aliases_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <EditTextPreference
+            android:defaultValue="https://svagaplus.com"
+            android:key="svaga_backend_url"
+            android:title="@string/svaga_backend_url_title"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+</androidx.preference.PreferenceScreen>

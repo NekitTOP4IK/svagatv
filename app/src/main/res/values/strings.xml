@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="app_name" translatable="false">ThystTV</string>
-    <string name="notification_downloads_channel_id" translatable="false">thysttv_downloads_channel</string>
-    <string name="notification_live_channel_id" translatable="false">thysttv_live_channel</string>
-    <string name="notification_playback_channel_id" translatable="false">thysttv_playback_channel</string>
+    <string name="app_name" translatable="false">SvagaTV</string>
+    <string name="notification_downloads_channel_id" translatable="false">svagatv_downloads_channel</string>
+    <string name="notification_live_channel_id" translatable="false">svagatv_live_channel</string>
+    <string name="notification_playback_channel_id" translatable="false">svagatv_playback_channel</string>
     <string name="lang_de" translatable="false">Deutsch</string>
     <string name="lang_en" translatable="false">English</string>
     <string name="lang_es" translatable="false">Español</string>
@@ -980,4 +980,38 @@
     <string name="cast_quality_managed" tools:ignore="MissingTranslation">Quality can’t be changed while casting. Choose it before you start casting.</string>
     <string name="cast_auto_quality" tools:ignore="MissingTranslation">Cast</string>
     <string name="cast_playing_remotely" tools:ignore="MissingTranslation">Playing on your Cast device</string>
+    <string name="svaga_settings" tools:ignore="MissingTranslation">Свага+</string>
+    <string name="svaga_settings_summary" tools:ignore="MissingTranslation">Subscriber badges, nickname gradients &amp; fonts, Social Rating, aliases, and account</string>
+    <string name="svaga_account_category" tools:ignore="MissingTranslation">Svaga+ Account</string>
+    <string name="svaga_account_connect" tools:ignore="MissingTranslation">Connect Svaga+ Account</string>
+    <string name="svaga_account_disconnected_summary" tools:ignore="MissingTranslation">Sign in via Twitch to vote in Social Rating and sync aliases</string>
+    <string name="svaga_account_connected_summary" tools:ignore="MissingTranslation">Connected as %1$s · Telegram: %2$s</string>
+    <string name="svaga_tg_linked_yes" tools:ignore="MissingTranslation">linked</string>
+    <string name="svaga_tg_linked_no" tools:ignore="MissingTranslation">not linked</string>
+    <string name="svaga_account_logout" tools:ignore="MissingTranslation">Sign out of Svaga+</string>
+    <string name="svaga_paste_token_title" tools:ignore="MissingTranslation">Enter Svaga+ Viewer Token</string>
+    <string name="svaga_features_category" tools:ignore="MissingTranslation">Chat Features</string>
+    <string name="svaga_badges_enabled_title" tools:ignore="MissingTranslation">Svaga+ Badges</string>
+    <string name="svaga_badges_enabled_summary" tools:ignore="MissingTranslation">Display custom subscriber, collectible, and Social Rating badges in chat</string>
+    <string name="svaga_styles_enabled_title" tools:ignore="MissingTranslation">Nickname Gradients &amp; Custom Fonts</string>
+    <string name="svaga_styles_enabled_summary" tools:ignore="MissingTranslation">Render Svaga+ colors, CSS gradients, shadows, and custom/pixel fonts</string>
+    <string name="svaga_social_rating_title" tools:ignore="MissingTranslation">Social Rating (Свагометр)</string>
+    <string name="svaga_social_rating_summary" tools:ignore="MissingTranslation">Show Swagometer &amp; Social Rating in viewer cards and allow +/- voting</string>
+    <string name="svaga_aliases_title" tools:ignore="MissingTranslation">Custom Nicknames (Aliases)</string>
+    <string name="svaga_aliases_summary" tools:ignore="MissingTranslation">Show custom nicknames in chat, replies, viewer cards, and @autocomplete</string>
+    <string name="svaga_manage_aliases_title" tools:ignore="MissingTranslation">Manage Aliases</string>
+    <string name="svaga_manage_aliases_summary" tools:ignore="MissingTranslation">%1$d custom nicknames saved</string>
+    <string name="svaga_backend_url_title" tools:ignore="MissingTranslation">Svaga+ Backend URL</string>
+    <string name="svaga_swagometer_format" tools:ignore="MissingTranslation">Свагометр: %1$s · Соц. рейтинг: %2$d</string>
+    <string name="svaga_set_alias" tools:ignore="MissingTranslation">Set custom nickname (Alias)</string>
+    <string name="svaga_alias_hint" tools:ignore="MissingTranslation">Custom nickname for %1$s (leave empty to reset)</string>
+    <string name="svaga_badge_how_to_get" tools:ignore="MissingTranslation">How to get</string>
+    <string name="svaga_badge_open_page" tools:ignore="MissingTranslation">Badge page</string>
+    <string name="favorite_emotes" tools:ignore="MissingTranslation">Favorites</string>
+    <string name="global_emotes" tools:ignore="MissingTranslation">Global</string>
+    <string name="search_emotes_hint" tools:ignore="MissingTranslation">Search emotes…</string>
+    <string name="add_favorite_emote" tools:ignore="MissingTranslation">Add to Favorites</string>
+    <string name="remove_favorite_emote" tools:ignore="MissingTranslation">Remove from Favorites</string>
+    <string name="chat_zebra_stripes" tools:ignore="MissingTranslation">Alternating message backgrounds</string>
+    <string name="chat_swipe_to_reply" tools:ignore="MissingTranslation">Swipe message left to reply</string>
 </resources>

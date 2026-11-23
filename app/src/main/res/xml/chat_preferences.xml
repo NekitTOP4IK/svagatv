@@ -28,6 +28,20 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="chat_zebra_stripes"
+            android:title="@string/chat_zebra_stripes"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="chat_swipe_to_reply"
+            android:title="@string/chat_swipe_to_reply"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="chat_timestamps"
             android:title="@string/timestamps"
             app:iconSpaceReserved="false"

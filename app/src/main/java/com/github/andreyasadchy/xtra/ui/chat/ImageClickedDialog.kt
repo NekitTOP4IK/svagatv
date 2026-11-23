@@ -28,9 +28,12 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class ImageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.CallbackListener {
+
+    @Inject lateinit var favoriteEmotesManager: FavoriteEmotesManager
 
     companion object {
         private const val IMAGE_URL = "image_url"
@@ -40,8 +43,20 @@ class ImageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callback
         private const val IMAGE_SOURCE = "image_source"
         private const val IMAGE_THIRD_PARTY = "image_third_party"
         private const val EMOTE_ID = "emote_id"
+        private const val IS_OVERLAY = "is_overlay"
+        private const val CAN_FAVORITE = "can_favorite"
 
-        fun newInstance(url: String?, name: String?, format: String?, isAnimated: Boolean?, source: Int?, thirdParty: Boolean?, emoteId: String?): ImageClickedDialog {
+        fun newInstance(
+            url: String?,
+            name: String?,
+            format: String?,
+            isAnimated: Boolean?,
+            source: Int?,
+            thirdParty: Boolean?,
+            emoteId: String?,
+            isOverlay: Boolean = false,
+            canFavorite: Boolean = false,
+        ): ImageClickedDialog {
             return ImageClickedDialog().apply {
                 arguments = Bundle().apply {
                     putString(IMAGE_URL, url)
@@ -51,6 +66,8 @@ class ImageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callback
                     putInt(IMAGE_SOURCE, source ?: -1)
                     putBoolean(IMAGE_THIRD_PARTY, thirdParty == true)
                     putString(EMOTE_ID, emoteId)
+                    putBoolean(IS_OVERLAY, isOverlay)
+                    putBoolean(CAN_FAVORITE, canFavorite)
                 }
             }
         }
@@ -105,13 +122,16 @@ class ImageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callback
                     )
                 }.build()
             )
-            args.getString(IMAGE_NAME)?.let {
+            val emoteName = args.getString(IMAGE_NAME)
+            val sourceCode = args.getInt(IMAGE_SOURCE, -1)
+            val isOverlay = args.getBoolean(IS_OVERLAY, false)
+            emoteName?.let {
                 imageName.visibility = View.VISIBLE
                 imageName.text = it
             }
-            args.getInt(IMAGE_SOURCE, -1).takeIf { it != -1 }?.let {
+            sourceCode.takeIf { it != -1 }?.let {
                 imageSource.visibility = View.VISIBLE
-                imageSource.text = when (it) {
+                val baseLabel = when (it) {
                     Emote.PERSONAL_STV -> getString(R.string.personal_stv_emote)
                     Emote.CHANNEL_STV -> getString(R.string.channel_stv_emote)
                     Emote.CHANNEL_BTTV -> getString(R.string.channel_bttv_emote)
@@ -120,6 +140,24 @@ class ImageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callback
                     Emote.GLOBAL_BTTV -> getString(R.string.global_bttv_emote)
                     Emote.GLOBAL_FFZ -> getString(R.string.global_ffz_emote)
                     else -> null
+                }
+                imageSource.text = if (isOverlay && baseLabel != null) "$baseLabel · Zero-Width" else baseLabel
+            }
+            val isFavoritable = !emoteName.isNullOrBlank() && (args.getBoolean(CAN_FAVORITE, false) || sourceCode != -1 || !args.getString(EMOTE_ID).isNullOrBlank())
+            if (isFavoritable && !emoteName.isNullOrBlank()) {
+                favoriteEmoteButton.visibility = View.VISIBLE
+                fun updateFavBtn() {
+                    val fav = favoriteEmotesManager.isFavorite(emoteName)
+                    favoriteEmoteButton.text = if (fav) {
+                        "★ ${getString(R.string.remove_favorite_emote)}"
+                    } else {
+                        "☆ ${getString(R.string.add_favorite_emote)}"
+                    }
+                }
+                updateFavBtn()
+                favoriteEmoteButton.setOnClickListener {
+                    favoriteEmotesManager.toggleFavorite(emoteName)
+                    updateFavBtn()
                 }
             }
             args.getString(EMOTE_ID)?.let {

@@ -31,6 +31,7 @@ import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
 import com.github.andreyasadchy.xtra.repository.TranslateAllMessagesUsersRepository
+import com.github.andreyasadchy.xtra.svagaplus.SvagaRepository
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.chat.ChatReadIRC
@@ -67,15 +68,56 @@ import javax.net.ssl.X509TrustManager
 
 
 @HiltViewModel
-class ChatViewModel @Inject constructor(
-    @param:ApplicationContext private val applicationContext: Context,
-    private val translateAllMessagesUsersRepository: TranslateAllMessagesUsersRepository,
-    private val graphQLRepository: GraphQLRepository,
-    private val helixRepository: HelixRepository,
-    private val playerRepository: PlayerRepository,
-    private val trustManager: X509TrustManager?,
-    private val json: Json,
-) : ViewModel() {
+class ChatViewModel : ViewModel {
+    private val applicationContext: Context
+    private val translateAllMessagesUsersRepository: TranslateAllMessagesUsersRepository
+    private val graphQLRepository: GraphQLRepository
+    private val helixRepository: HelixRepository
+    private val playerRepository: PlayerRepository
+    private val trustManager: X509TrustManager?
+    private val json: Json
+    private val svagaRepository: SvagaRepository?
+
+    @Inject
+    constructor(
+        @ApplicationContext applicationContext: Context,
+        translateAllMessagesUsersRepository: TranslateAllMessagesUsersRepository,
+        graphQLRepository: GraphQLRepository,
+        helixRepository: HelixRepository,
+        playerRepository: PlayerRepository,
+        trustManager: X509TrustManager?,
+        json: Json,
+        svagaRepository: SvagaRepository,
+    ) : super() {
+        this.applicationContext = applicationContext
+        this.translateAllMessagesUsersRepository = translateAllMessagesUsersRepository
+        this.graphQLRepository = graphQLRepository
+        this.helixRepository = helixRepository
+        this.playerRepository = playerRepository
+        this.trustManager = trustManager
+        this.json = json
+        this.svagaRepository = svagaRepository
+        observeSvagaUpdates()
+    }
+
+    constructor(
+        applicationContext: Context,
+        translateAllMessagesUsersRepository: TranslateAllMessagesUsersRepository,
+        graphQLRepository: GraphQLRepository,
+        helixRepository: HelixRepository,
+        playerRepository: PlayerRepository,
+        trustManager: X509TrustManager?,
+        json: Json,
+    ) : super() {
+        this.applicationContext = applicationContext
+        this.translateAllMessagesUsersRepository = translateAllMessagesUsersRepository
+        this.graphQLRepository = graphQLRepository
+        this.helixRepository = helixRepository
+        this.playerRepository = playerRepository
+        this.trustManager = trustManager
+        this.json = json
+        this.svagaRepository = null
+    }
 
     val integrity = MutableStateFlow<String?>(null)
 
@@ -135,6 +177,7 @@ class ChatViewModel @Inject constructor(
     /** Set by [ChatFragment] while its view exists. Called on the main thread right after [chatMessages] changes. */
     var messageListener: ((List<ChatMessageStore.Change>) -> Unit)? = null
     val updateUserMessages = MutableSharedFlow<String>()
+    val updateLoginMessages = MutableSharedFlow<String>()
     val userEmotesUpdated = MutableSharedFlow<Unit>()
     val thirdPartyEmotesUpdated = MutableSharedFlow<Unit>()
 
@@ -144,12 +187,26 @@ class ChatViewModel @Inject constructor(
     val autoCompleteList = mutableListOf<Any?>()
     private val chatters = ConcurrentHashMap<String, Chatter>()
 
+    private fun observeSvagaUpdates() {
+        val repo = svagaRepository ?: return
+        viewModelScope.launch {
+            repo.visualUpdates.collect { login ->
+                if (login != null) {
+                    updateLoginMessages.emit(login)
+                } else if (!reloadMessages.value) {
+                    reloadMessages.value = true
+                }
+            }
+        }
+    }
+
     fun startLive(networkLibrary: String?, channelId: String?, channelLogin: String?, channelName: String?, streamId: String?) {
         if (chatReadIRC == null && chatReadWebSocket == null && eventSub == null && channelLogin != null) {
             messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             this.streamId = streamId
+            svagaRepository?.openChannel(channelLogin)
             startLiveChat(channelId, channelLogin)
-            addChatter(channelName)
+            addChatter(channelName, channelLogin)
             loadEmotes(channelId, channelLogin)
             if (applicationContext.prefs().getBoolean(C.CHAT_RECENT, true)) {
                 loadRecentMessages(networkLibrary, channelLogin)
@@ -166,6 +223,7 @@ class ChatViewModel @Inject constructor(
     fun startReplay(channelId: String?, channelLogin: String?, chatUrl: String? = null, videoId: String? = null, startTime: Int = 0, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager == null && chatReplayManagerLocal == null) {
             messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
+            svagaRepository?.openChannel(channelLogin)
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
             if (videoId != null) {
                 loadEmotes(channelId, channelLogin)
@@ -175,6 +233,7 @@ class ChatViewModel @Inject constructor(
 
     fun resumeLive(channelId: String?, channelLogin: String?) {
         if ((chatReadJob?.isActive == false) && channelLogin != null && autoReconnect) {
+            svagaRepository?.openChannel(channelLogin)
             startLiveChat(channelId, channelLogin)
         }
     }
@@ -201,6 +260,7 @@ class ChatViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        svagaRepository?.closeChannel()
         stopLiveChat()
         stopReplayChat()
         super.onCleared()
@@ -927,6 +987,11 @@ class ChatViewModel @Inject constructor(
                 val deletedMessage = targetId?.let { targetId ->
                     messageStore.find { it.id == targetId }
                 }
+                deletedMessage?.let { msg ->
+                    msg.isDeleted = true
+                    msg.userId?.let { uid -> updateUserMessages.emit(uid) }
+                    msg.userLogin?.let { ulogin -> updateLoginMessages.emit(ulogin.lowercase()) }
+                }
                 val clearMessage = getClearMessage(chatMessage, deletedMessage, nameDisplay)
                 onMessage(clearMessage)
             }
@@ -1410,15 +1475,15 @@ class ChatViewModel @Inject constructor(
 
     private suspend fun onChatMessage(message: ChatMessage, networkLibrary: String?, isLoggedIn: Boolean, accountId: String?, channelId: String?) {
         onMessage(message)
-        addChatter(message.userName)
+        addChatter(message.userName, message.userLogin)
         if (isLoggedIn && !accountId.isNullOrBlank() && message.userId == accountId) {
             onUpdatePresence(networkLibrary, null, channelId, false)
         }
     }
 
-    private fun addChatter(displayName: String?) {
+    private fun addChatter(displayName: String?, userLogin: String? = null) {
         if (displayName != null && !chatters.containsKey(displayName)) {
-            val chatter = Chatter(displayName)
+            val chatter = Chatter(displayName, userLogin?.lowercase() ?: displayName.lowercase())
             chatters[displayName] = chatter
             synchronized(autoCompleteList) {
                 autoCompleteList.add(chatter)

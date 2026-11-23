@@ -25,6 +25,8 @@ import com.github.andreyasadchy.xtra.model.chat.StvBadge
 import com.github.andreyasadchy.xtra.model.chat.StvUser
 import com.github.andreyasadchy.xtra.model.chat.TwitchBadge
 import com.github.andreyasadchy.xtra.model.chat.TwitchEmote
+import com.github.andreyasadchy.xtra.svagaplus.SvagaBadge
+import com.github.andreyasadchy.xtra.svagaplus.SvagaRepository
 import com.github.andreyasadchy.xtra.ui.view.NamePaintImageSpan
 import com.github.andreyasadchy.xtra.util.chat.ChatAdapterUtils
 import java.util.Random
@@ -75,6 +77,10 @@ class ChatAdapter(
     private val messageClickListener: ((String?) -> Unit)?,
     private val replyClickListener: (() -> Unit)?,
     private val imageClickListener: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?,
+    private val channelLogin: String? = null,
+    private val svagaRepository: SvagaRepository? = null,
+    private val svagaBadgeClickListener: ((SvagaBadge) -> Unit)? = null,
+    private val enableZebraStripes: Boolean = false,
 ) : RecyclerView.Adapter<ChatAdapter.ViewHolder>() {
 
     var translateAllMessages = false
@@ -92,17 +98,30 @@ class ChatAdapter(
         return ViewHolder(LayoutInflater.from(parent.context).inflate(R.layout.chat_list_item, parent, false))
     }
 
+    fun getMessageAt(position: Int): ChatMessage? = synchronized(messages) {
+        messages.getOrNull(position)
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val chatMessage = synchronized(messages) {
             messages.getOrNull(position)
         } ?: return
+        val svagaCtx = svagaRepository?.let { repo ->
+            ChatAdapterUtils.SvagaChatContext(
+                channelLogin = channelLogin,
+                repository = repo,
+                onBadgeClick = svagaBadgeClickListener,
+                enableZebraStripes = enableZebraStripes && !useDarkOverlay,
+                rowPosition = position,
+            )
+        }
         val result = ChatAdapterUtils.prepareChatMessage(
             chatMessage, holder.textView, enableTimestamps, timestampFormat, firstMsgVisibility, firstChatMsg, redeemedChatMsg, redeemedNoMsg,
             rewardChatMsg, replyMessage, null, useRandomColors, random, useReadableColors, effectiveIsLightTheme(), nameDisplay, useBoldNames, showNamePaints,
             namePaints, showStvBadges, stvBadges, showPersonalEmotes, personalEmoteSets, stvUsers, enableOverlayEmotes, showSystemMessageEmotes,
             loggedInUser, chatUrl, getEmoteBytes, userColors, savedColors, translateAllMessages, translateMessage, showLanguageDownloadDialog,
             true, localTwitchEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalTwitchEmotes, savedLocalBadges,
-            savedLocalCheerEmotes, savedLocalEmotes
+            savedLocalCheerEmotes, savedLocalEmotes, svagaCtx
         )
         holder.imageBinder.bind({ holder.bind(chatMessage, result.builder) }) { onImageLoaded ->
             ChatAdapterUtils.loadImages(
@@ -136,6 +155,13 @@ class ChatAdapter(
     }
 
     fun createMessageClickedChatAdapter(): MessageClickedChatAdapter {
+        val dialogSvagaCtx = svagaRepository?.let { repo ->
+            ChatAdapterUtils.SvagaChatContext(
+                channelLogin = channelLogin,
+                repository = repo,
+                onBadgeClick = svagaBadgeClickListener,
+            )
+        }
         return MessageClickedChatAdapter(
             messages, localTwitchEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, namePaints, stvBadges, personalEmoteSets,
             stvUsers, enableTimestamps, timestampFormat, firstMsgVisibility, firstChatMsg, redeemedChatMsg, redeemedNoMsg, rewardChatMsg, replyMessage,
@@ -144,11 +170,18 @@ class ChatAdapter(
             useRandomColors, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, showStvBadges, showPersonalEmotes,
             showSystemMessageEmotes, chatUrl, getEmoteBytes, dialogBackgroundColor, messageTextSize, emoteSize, badgeSize,
             emoteQuality, animateGifs, enableOverlayEmotes, translateAllMessages, translateMessage, showLanguageDownloadDialog, random, userColors,
-            savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage
+            savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage, dialogSvagaCtx
         )
     }
 
     fun createReplyClickedChatAdapter(): ReplyClickedChatAdapter {
+        val dialogSvagaCtx = svagaRepository?.let { repo ->
+            ChatAdapterUtils.SvagaChatContext(
+                channelLogin = channelLogin,
+                repository = repo,
+                onBadgeClick = svagaBadgeClickListener,
+            )
+        }
         return ReplyClickedChatAdapter(
             messages, localTwitchEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, namePaints, stvBadges, personalEmoteSets,
             stvUsers, enableTimestamps, timestampFormat, firstMsgVisibility, firstChatMsg, redeemedChatMsg, redeemedNoMsg, rewardChatMsg, replyMessage,
@@ -156,7 +189,7 @@ class ChatAdapter(
             useRandomColors, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, showStvBadges, showPersonalEmotes,
             showSystemMessageEmotes, chatUrl, getEmoteBytes, dialogBackgroundColor, messageTextSize, emoteSize, badgeSize,
             emoteQuality, animateGifs, enableOverlayEmotes, translateAllMessages, translateMessage, showLanguageDownloadDialog, random, userColors,
-            savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage
+            savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage, dialogSvagaCtx
         )
     }
 

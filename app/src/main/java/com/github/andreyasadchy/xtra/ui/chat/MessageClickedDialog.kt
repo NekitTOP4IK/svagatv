@@ -7,11 +7,17 @@ import android.content.Context
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
+import android.text.format.DateUtils
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
@@ -30,6 +36,9 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.DialogChatMessageClickBinding
 import com.github.andreyasadchy.xtra.model.chat.ChatMessage
 import com.github.andreyasadchy.xtra.model.ui.User
+import com.github.andreyasadchy.xtra.svagaplus.SvagaAuthDialog
+import com.github.andreyasadchy.xtra.svagaplus.SvagaRepository
+import com.github.andreyasadchy.xtra.svagaplus.SvagaSocialRating
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
@@ -42,6 +51,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.CallbackListener {
@@ -57,19 +67,22 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
     companion object {
         private const val KEY_MESSAGING = "messaging"
         private const val KEY_CHANNEL_ID = "channelId"
+        private const val KEY_CHANNEL_LOGIN = "channelLogin"
         private val savedUsers = mutableListOf<Pair<User, String?>>()
         private var selectedLanguage: String? = null
 
-        fun newInstance(messagingEnabled: Boolean, channelId: String?): MessageClickedDialog {
+        fun newInstance(messagingEnabled: Boolean, channelId: String?, channelLogin: String? = null): MessageClickedDialog {
             return MessageClickedDialog().apply {
                 arguments = Bundle().apply {
                     putBoolean(KEY_MESSAGING, messagingEnabled)
                     putString(KEY_CHANNEL_ID, channelId)
+                    putString(KEY_CHANNEL_LOGIN, channelLogin)
                 }
             }
         }
     }
 
+    @Inject lateinit var svagaRepository: SvagaRepository
     private var _binding: DialogChatMessageClickBinding? = null
     private val binding get() = _binding!!
     private val viewModel: MessageClickedViewModel by viewModels()
@@ -232,7 +245,136 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
             if (requireContext().prefs().getBoolean(C.DEBUG_CHAT_FULLMSG, false)) {
                 copyFullMsg.visibility = View.VISIBLE
             }
+            setupSvagaControls()
         }
+    }
+
+    private fun setupSvagaControls() {
+        val targetLogin = adapter?.selectedMessage?.userLogin?.trim()?.lowercase() ?: return
+        val channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN)?.trim()?.lowercase()
+
+        with(binding) {
+            if (svagaRepository.aliasManager.isEnabled()) {
+                setAliasButton.visibility = View.VISIBLE
+                val currentAlias = svagaRepository.aliasManager.getRawAlias(targetLogin)
+                setAliasButton.text = if (!currentAlias.isNullOrBlank()) {
+                    "${getString(R.string.svaga_set_alias)}: $currentAlias"
+                } else {
+                    getString(R.string.svaga_set_alias)
+                }
+                setAliasButton.setOnClickListener {
+                    showSetAliasDialog(targetLogin)
+                }
+            }
+
+            if (!channelLogin.isNullOrBlank() && svagaRepository.isSocialRatingEnabled()) {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val rating = svagaRepository.getSocialRating(channelLogin, targetLogin)
+                    if (rating != null) {
+                        userLayout.visibility = View.VISIBLE
+                        renderSocialRating(rating)
+                    }
+                }
+                viewLifecycleOwner.lifecycleScope.launch {
+                    repeatOnLifecycle(Lifecycle.State.STARTED) {
+                        svagaRepository.ratingUpdates.collectLatest { updated ->
+                            if (updated.channelLogin == channelLogin && updated.viewerLogin == targetLogin) {
+                                renderSocialRating(updated)
+                            }
+                        }
+                    }
+                }
+                svagaVotePlus.setOnClickListener { submitVote(channelLogin, targetLogin, 1) }
+                svagaVoteMinus.setOnClickListener { submitVote(channelLogin, targetLogin, -1) }
+            }
+        }
+    }
+
+    private fun renderSocialRating(rating: SvagaSocialRating) {
+        with(binding) {
+            svagaRatingRow.visibility = View.VISIBLE
+            val sign = if (rating.swagScore > 0) "+${rating.swagScore}" else rating.swagScore.toString()
+            svagaRatingText.text = getString(R.string.svaga_swagometer_format, sign, rating.socialScore)
+            svagaRatingText.setTextColor(
+                when {
+                    rating.swagScore > 0 -> Color.parseColor("#68D391")
+                    rating.swagScore < 0 -> Color.parseColor("#FC8181")
+                    else -> Color.parseColor("#CBD5E0")
+                }
+            )
+        }
+    }
+
+    private fun submitVote(channelLogin: String, targetLogin: String, value: Int) {
+        if (svagaRepository.authManager.currentToken == null) {
+            if (childFragmentManager.findFragmentByTag(SvagaAuthDialog.TAG) == null) {
+                SvagaAuthDialog().show(childFragmentManager, SvagaAuthDialog.TAG)
+            }
+            return
+        }
+        binding.svagaVotePlus.isEnabled = false
+        binding.svagaVoteMinus.isEnabled = false
+        viewLifecycleOwner.lifecycleScope.launch {
+            val res = svagaRepository.voteSocialRating(channelLogin, targetLogin, value)
+            binding.svagaVotePlus.isEnabled = true
+            binding.svagaVoteMinus.isEnabled = true
+            if (res.ok && res.swagScore != null) {
+                renderSocialRating(
+                    SvagaSocialRating(
+                        channelLogin = channelLogin,
+                        viewerLogin = targetLogin,
+                        swagScore = res.swagScore,
+                        socialScore = res.socialScore ?: 0,
+                        enabled = true,
+                    )
+                )
+            } else {
+                val cooldownSuffix = res.nextVoteAtMs?.let { nextMs ->
+                    val diffSec = ((nextMs - System.currentTimeMillis()) / 1000L).coerceAtLeast(1L)
+                    " (${DateUtils.formatElapsedTime(diffSec)})"
+                }.orEmpty()
+                Toast.makeText(
+                    requireContext(),
+                    (res.error ?: "Ошибка голосования") + cooldownSuffix,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+
+    private fun showSetAliasDialog(targetLogin: String) {
+        val ctx = requireContext()
+        val pad = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 18f, resources.displayMetrics).toInt()
+        val input = EditText(ctx).apply {
+            hint = getString(R.string.svaga_alias_hint, targetLogin)
+            setText(svagaRepository.aliasManager.getRawAlias(targetLogin).orEmpty())
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSelection(text.length)
+        }
+        val box = LinearLayout(ctx).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(input, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        ctx.getAlertDialogBuilder()
+            .setTitle(R.string.svaga_set_alias)
+            .setView(box)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val text = input.text?.toString().orEmpty().trim()
+                if (text.isEmpty()) {
+                    svagaRepository.aliasManager.removeAlias(targetLogin)
+                } else {
+                    svagaRepository.aliasManager.setAlias(targetLogin, text)
+                }
+                adapter?.notifyDataSetChanged()
+                setupSvagaControls()
+            }
+            .setNeutralButton("Сбросить") { _, _ ->
+                svagaRepository.aliasManager.removeAlias(targetLogin)
+                adapter?.notifyDataSetChanged()
+                setupSvagaControls()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun updateButtons(chatMessage: ChatMessage) {
@@ -334,7 +476,10 @@ class MessageClickedDialog : BottomSheetDialogFragment(), IntegrityDialog.Callba
             if (user.name != null) {
                 userLayout.visibility = View.VISIBLE
                 userName.visibility = View.VISIBLE
-                userName.text = if (user.login != null && !user.login.equals(user.name, true)) {
+                val alias = svagaRepository.aliasManager.getAlias(user.login)
+                userName.text = if (!alias.isNullOrBlank()) {
+                    "$alias (${user.login ?: user.name})"
+                } else if (user.login != null && !user.login.equals(user.name, true)) {
                     when (requireContext().prefs().getString(C.UI_NAME_DISPLAY, "0")) {
                         "0" -> "${user.name}(${user.login})"
                         "1" -> user.name

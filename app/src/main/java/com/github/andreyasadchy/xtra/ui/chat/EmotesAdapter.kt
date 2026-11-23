@@ -3,6 +3,7 @@ package com.github.andreyasadchy.xtra.ui.chat
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.ImageView
+import androidx.appcompat.widget.TooltipCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -21,14 +22,15 @@ class EmotesAdapter(
     private val fragment: Fragment,
     private val clickListener: (Emote) -> Unit,
     private val emoteQuality: String,
+    private val longClickListener: ((Emote) -> Unit)? = null,
 ) : ListAdapter<Emote, RecyclerView.ViewHolder>(
     object : DiffUtil.ItemCallback<Emote>() {
         override fun areItemsTheSame(oldItem: Emote, newItem: Emote): Boolean {
-            return oldItem.name == newItem.name
+            return oldItem.name == newItem.name && oldItem.source == newItem.source
         }
 
         override fun areContentsTheSame(oldItem: Emote, newItem: Emote): Boolean {
-            return true
+            return oldItem.url2x == newItem.url2x && oldItem.isOverlayEmote == newItem.isOverlayEmote
         }
     }
 ) {
@@ -41,8 +43,9 @@ class EmotesAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         val emote = getItem(position)
-        fragment.requireContext().imageLoader.enqueue(
-            ImageRequest.Builder(fragment.requireContext()).apply {
+        val ctx = fragment.context ?: holder.itemView.context
+        ctx.imageLoader.enqueue(
+            ImageRequest.Builder(ctx).apply {
                 data(
                     when (emoteQuality) {
                         "4" -> emote.url4x ?: emote.url3x ?: emote.url2x ?: emote.url1x
@@ -60,6 +63,15 @@ class EmotesAdapter(
                 target(holder.itemView as ImageView)
             }.build()
         )
+        TooltipCompat.setTooltipText(holder.itemView, emote.name)
         holder.itemView.setOnClickListener { clickListener(emote) }
+        if (longClickListener != null) {
+            holder.itemView.setOnLongClickListener {
+                longClickListener.invoke(emote)
+                true
+            }
+        } else {
+            holder.itemView.isLongClickable = false
+        }
     }
 }

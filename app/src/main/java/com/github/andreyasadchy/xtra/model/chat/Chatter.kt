@@ -1,7 +1,11 @@
 package com.github.andreyasadchy.xtra.model.chat
 
 
-class Chatter(val name: String?) {
+class Chatter(
+    val name: String?,
+    val login: String? = name?.lowercase(),
+    var alias: String? = null,
+) {
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

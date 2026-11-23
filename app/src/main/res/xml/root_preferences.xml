@@ -51,6 +51,13 @@
             android:title="@string/chat_settings"
             app:singleLineTitle="false" />
 
+        <Preference
+            android:icon="@drawable/ic_ms_palette_24"
+            android:key="svaga_settings"
+            android:summary="@string/svaga_settings_summary"
+            android:title="@string/svaga_settings"
+            app:singleLineTitle="false" />
+
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:icon="@drawable/ic_ms_notifications_24"

@@ -97,6 +97,53 @@
                     android:visibility="gone"
                     tools:text="Followed at 123456"
                     tools:visibility="visible" />
+
+                <LinearLayout
+                    android:id="@+id/svagaRatingRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:id="@+id/svagaRatingText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textStyle="bold"
+                        tools:text="Свагометр: +42 · Соц. рейтинг: 120" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/svagaVoteMinus"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="44dp"
+                        android:layout_height="36dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:text="−"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/svagaVotePlus"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="44dp"
+                        android:layout_height="36dp"
+                        android:layout_marginStart="6dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        android:text="+"
+                        android:textSize="16sp" />
+                </LinearLayout>
             </LinearLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
@@ -144,6 +191,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/reply"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <Button
+                android:id="@+id/setAliasButton"
+                style="?attr/bottomSheetButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/svaga_set_alias"
                 android:visibility="gone"
                 tools:visibility="visible" />
 

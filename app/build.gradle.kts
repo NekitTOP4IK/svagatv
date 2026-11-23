@@ -44,11 +44,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.tzii.thysttv"
+        applicationId = "com.olesha.entertainment.svagatv"
         minSdk = 23
         targetSdk = 36
         versionCode = 18
-        versionName = "1.6.0"
+        versionName = "1.6.0-svaga1"
     }
 
     buildTypes {

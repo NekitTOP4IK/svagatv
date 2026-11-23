@@ -82,6 +82,7 @@ class MessageClickedChatAdapter(
     private val savedLocalEmotes: MutableMap<String, ByteArray>,
     private val loggedInUser: String?,
     var selectedMessage: ChatMessage?,
+    private val svagaContext: ChatAdapterUtils.SvagaChatContext? = null,
 ) : RecyclerView.Adapter<MessageClickedChatAdapter.ViewHolder>() {
 
     val userId = selectedMessage?.userId
@@ -113,7 +114,7 @@ class MessageClickedChatAdapter(
             useRandomColors, random, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, namePaints, showStvBadges,
             stvBadges, showPersonalEmotes, personalEmoteSets, stvUsers, showSystemMessageEmotes, enableOverlayEmotes, loggedInUser, chatUrl,
             getEmoteBytes, userColors, savedColors, translateAllMessages, translateMessage, showLanguageDownloadDialog, false, localTwitchEmotes,
-            thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes
+            thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, svagaContext
         )
         if (chatMessage == selectedMessage) {
             holder.textView.setBackgroundResource(R.color.chatMessageSelected)

@@ -11,6 +11,7 @@ import android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
 import android.text.TextPaint
 import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.URLSpan
 import android.util.Patterns
@@ -32,6 +33,8 @@ import com.github.andreyasadchy.xtra.model.chat.StvBadge
 import com.github.andreyasadchy.xtra.model.chat.StvUser
 import com.github.andreyasadchy.xtra.model.chat.TwitchBadge
 import com.github.andreyasadchy.xtra.model.chat.TwitchEmote
+import com.github.andreyasadchy.xtra.svagaplus.SvagaBadge
+import com.github.andreyasadchy.xtra.svagaplus.SvagaRepository
 import com.github.andreyasadchy.xtra.ui.chat.EmoteNameIndex
 import com.github.andreyasadchy.xtra.ui.view.CenteredImageSpan
 import com.github.andreyasadchy.xtra.ui.view.NamePaintImageSpan
@@ -51,7 +54,15 @@ object ChatAdapterUtils {
     private const val PI_DEGREES = 180f
     private const val TWO_PI_DEGREES = 360f
 
-    fun prepareChatMessage(chatMessage: ChatMessage, itemView: View, enableTimestamps: Boolean, timestampFormat: String?, firstMsgVisibility: Int, firstChatMsg: String, redeemedChatMsg: String, redeemedNoMsg: String, rewardChatMsg: String, replyMessage: String, imageClick: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?, useRandomColors: Boolean, random: Random, useReadableColors: Boolean, isLightTheme: Boolean, nameDisplay: String?, useBoldNames: Boolean, showNamePaints: Boolean, namePaints: List<NamePaint>, showStvBadges: Boolean, stvBadges: List<StvBadge>, showPersonalEmotes: Boolean, personalEmoteSets: Map<String, List<Emote>>, stvUsers: Map<String, StvUser>, enableOverlayEmotes: Boolean, showSystemMessageEmotes: Boolean, loggedInUser: String?, chatUrl: String?, getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?, userColors: HashMap<String, Int>, savedColors: HashMap<String, Int>, translateAllMessages: Boolean, translateMessage: (ChatMessage, String?) -> Unit, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean, localTwitchEmotes: List<TwitchEmote>, thirdPartyEmotes: EmoteNameIndex, globalBadges: List<TwitchBadge>, channelBadges: List<TwitchBadge>, cheerEmotes: List<CheerEmote>, savedLocalTwitchEmotes: MutableMap<String, ByteArray>, savedLocalBadges: MutableMap<String, ByteArray>, savedLocalCheerEmotes: MutableMap<String, ByteArray>, savedLocalEmotes: MutableMap<String, ByteArray>): MessageResult {
+    data class SvagaChatContext(
+        val channelLogin: String?,
+        val repository: SvagaRepository,
+        val onBadgeClick: ((SvagaBadge) -> Unit)? = null,
+        val enableZebraStripes: Boolean = false,
+        val rowPosition: Int = 0,
+    )
+
+    fun prepareChatMessage(chatMessage: ChatMessage, itemView: View, enableTimestamps: Boolean, timestampFormat: String?, firstMsgVisibility: Int, firstChatMsg: String, redeemedChatMsg: String, redeemedNoMsg: String, rewardChatMsg: String, replyMessage: String, imageClick: ((String?, String?, String?, Boolean?, Int?, Boolean?, String?) -> Unit)?, useRandomColors: Boolean, random: Random, useReadableColors: Boolean, isLightTheme: Boolean, nameDisplay: String?, useBoldNames: Boolean, showNamePaints: Boolean, namePaints: List<NamePaint>, showStvBadges: Boolean, stvBadges: List<StvBadge>, showPersonalEmotes: Boolean, personalEmoteSets: Map<String, List<Emote>>, stvUsers: Map<String, StvUser>, enableOverlayEmotes: Boolean, showSystemMessageEmotes: Boolean, loggedInUser: String?, chatUrl: String?, getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?, userColors: HashMap<String, Int>, savedColors: HashMap<String, Int>, translateAllMessages: Boolean, translateMessage: (ChatMessage, String?) -> Unit, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean, localTwitchEmotes: List<TwitchEmote>, thirdPartyEmotes: EmoteNameIndex, globalBadges: List<TwitchBadge>, channelBadges: List<TwitchBadge>, cheerEmotes: List<CheerEmote>, savedLocalTwitchEmotes: MutableMap<String, ByteArray>, savedLocalBadges: MutableMap<String, ByteArray>, savedLocalCheerEmotes: MutableMap<String, ByteArray>, savedLocalEmotes: MutableMap<String, ByteArray>, svagaContext: SvagaChatContext? = null): MessageResult {
         val builder = SpannableStringBuilder()
         val images = ArrayList<Image>()
         var imagePaint: NamePaint? = null
@@ -62,7 +73,10 @@ object ChatAdapterUtils {
         var builderIndex = 0
         when {
             chatMessage.isReply -> {
-                val userName = if (chatMessage.reply?.userName != null && chatMessage.reply.userLogin != null && !chatMessage.reply.userLogin.equals(chatMessage.reply.userName, true)) {
+                val replyAlias = svagaContext?.repository?.aliasManager?.getAlias(chatMessage.reply?.userLogin)
+                val userName = if (!replyAlias.isNullOrBlank()) {
+                    if (nameDisplay == "1") replyAlias else "$replyAlias(${chatMessage.reply?.userLogin})"
+                } else if (chatMessage.reply?.userName != null && chatMessage.reply.userLogin != null && !chatMessage.reply.userLogin.equals(chatMessage.reply.userName, true)) {
                     when (nameDisplay) {
                         "0" -> "${chatMessage.reply.userName}(${chatMessage.reply.userLogin})"
                         "1" -> chatMessage.reply.userName
@@ -265,7 +279,44 @@ object ChatAdapterUtils {
                         ))
                     }
                 }
-                val color = if (chatMessage.color != null) {
+                val svagaProfile = svagaContext?.let { ctx ->
+                    if (ctx.repository.isBadgesEnabled() || ctx.repository.isStylesEnabled()) {
+                        ctx.repository.getViewerProfile(ctx.channelLogin, chatMessage.userLogin)
+                    } else null
+                }
+                if (svagaContext != null && svagaContext.repository.isBadgesEnabled() && svagaProfile != null) {
+                    svagaProfile.badges.forEach { svagaBadge ->
+                        builder.append(". ")
+                        builder.setSpan(ForegroundColorSpan(Color.TRANSPARENT), builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        if (svagaContext.onBadgeClick != null || imageClick != null) {
+                            builder.setSpan(object : ClickableSpan() {
+                                override fun onClick(widget: View) {
+                                    if (svagaContext.onBadgeClick != null) {
+                                        svagaContext.onBadgeClick.invoke(svagaBadge)
+                                    } else {
+                                        imageClick?.invoke(svagaBadge.url, svagaBadge.title, null, svagaBadge.isAnimated, null, true, null)
+                                    }
+                                }
+
+                                override fun updateDrawState(ds: TextPaint) {}
+                            }, builderIndex, builderIndex + 1, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                        images.add(Image(
+                            url1x = svagaBadge.url,
+                            url2x = svagaBadge.url,
+                            url3x = svagaBadge.url,
+                            url4x = svagaBadge.url,
+                            isAnimated = svagaBadge.isAnimated,
+                            thirdParty = true,
+                            start = builderIndex++,
+                            end = builderIndex++
+                        ))
+                    }
+                }
+                val svagaColorOverride = if (svagaContext != null && svagaContext.repository.isStylesEnabled()) {
+                    svagaProfile?.nameColor
+                } else null
+                val color = svagaColorOverride ?: if (chatMessage.color != null) {
                     getSavedColor(chatMessage.color, savedColors, useReadableColors, isLightTheme)
                 } else {
                     userColors[chatMessage.userName] ?: if (useRandomColors) {
@@ -281,7 +332,13 @@ object ChatAdapterUtils {
                     }
                 }
                 if (!chatMessage.userName.isNullOrBlank()) {
-                    userName = if (chatMessage.userLogin != null && !chatMessage.userLogin.equals(chatMessage.userName, true)) {
+                    val customAlias = svagaContext?.repository?.aliasManager?.getAlias(chatMessage.userLogin)
+                    userName = if (!customAlias.isNullOrBlank()) {
+                        when (nameDisplay) {
+                            "1" -> customAlias
+                            else -> "$customAlias(${chatMessage.userLogin ?: chatMessage.userName})"
+                        }
+                    } else if (chatMessage.userLogin != null && !chatMessage.userLogin.equals(chatMessage.userName, true)) {
                         when (nameDisplay) {
                             "0" -> "${chatMessage.userName}(${chatMessage.userLogin})"
                             "1" -> chatMessage.userName
@@ -295,6 +352,12 @@ object ChatAdapterUtils {
                     if (useBoldNames) {
                         builder.setSpan(StyleSpan(Typeface.BOLD), builderIndex, builderIndex + userName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
                     }
+                    if (svagaContext != null && svagaContext.repository.isStylesEnabled() && svagaProfile?.fontPresetId != null) {
+                        svagaContext.repository.fontManager.createSpanIfAvailable(svagaProfile.fontPresetId)?.let { fontSpan ->
+                            builder.setSpan(fontSpan, builderIndex, builderIndex + userName.length, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                    }
+                    var appliedStvPaint = false
                     if (showNamePaints && !chatMessage.userId.isNullOrBlank()) {
                         stvUser?.paintId?.let { paintId ->
                             synchronized(namePaints) {
@@ -304,6 +367,7 @@ object ChatAdapterUtils {
                             when (paint.type) {
                                 "LINEAR_GRADIENT", "RADIAL_GRADIENT" -> {
                                     if (paint.colors != null && paint.colorPositions != null) {
+                                        appliedStvPaint = true
                                         builder.setSpan(
                                             NamePaintSpan(
                                                 userName,
@@ -322,10 +386,31 @@ object ChatAdapterUtils {
                                 }
                                 "URL" -> {
                                     if (!paint.imageUrl.isNullOrBlank()) {
+                                        appliedStvPaint = true
                                         imagePaint = paint
                                         userNameStartIndex = builderIndex
                                     }
                                 }
+                            }
+                        }
+                    }
+                    if (!appliedStvPaint && svagaContext != null && svagaContext.repository.isStylesEnabled()) {
+                        svagaProfile?.paint?.let { svagaPaint ->
+                            if (svagaPaint.type != null && svagaPaint.colors != null && svagaPaint.colorPositions != null) {
+                                builder.setSpan(
+                                    NamePaintSpan(
+                                        userName,
+                                        svagaPaint.type,
+                                        svagaPaint.colors,
+                                        svagaPaint.colorPositions,
+                                        svagaPaint.angle,
+                                        svagaPaint.repeat,
+                                        svagaPaint.shadows
+                                    ),
+                                    builderIndex,
+                                    builderIndex + userName.length,
+                                    SPAN_EXCLUSIVE_EXCLUSIVE
+                                )
                             }
                         }
                     }
@@ -339,6 +424,7 @@ object ChatAdapterUtils {
                     }
                 }
                 if (chatMessage.message != null) {
+                    val msgStart = builderIndex
                     builder.append(chatMessage.message)
                     if (chatMessage.isAction) {
                         builder.setSpan(ForegroundColorSpan(color), builderIndex, builderIndex + chatMessage.message.length, SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -346,6 +432,10 @@ object ChatAdapterUtils {
                     val result = prepareEmotes(chatMessage, chatMessage.message, builder, builderIndex, images, imageClick, useReadableColors, isLightTheme, enableOverlayEmotes, useBoldNames, loggedInUser, chatUrl, getEmoteBytes, savedColors, localTwitchEmotes, showPersonalEmotes, personalEmoteSets, stvUser, thirdPartyEmotes, cheerEmotes, savedLocalTwitchEmotes, savedLocalCheerEmotes, savedLocalEmotes)
                     wasMentioned = result
                     builderIndex = builder.length
+                    if (chatMessage.isDeleted && builderIndex > msgStart) {
+                        builder.setSpan(StrikethroughSpan(), msgStart, builderIndex, SPAN_EXCLUSIVE_EXCLUSIVE)
+                        builder.setSpan(ForegroundColorSpan(getSavedColor("#888888", savedColors, useReadableColors, isLightTheme)), msgStart, builderIndex, SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
                 }
                 if (chatMessage.translatedMessage != null) {
                     translated = true
@@ -361,6 +451,9 @@ object ChatAdapterUtils {
                     chatMessage.reward?.id != null && firstMsgVisibility < 2 -> itemView.setBackgroundResource(R.color.chatMessageReward)
                     chatMessage.systemMsg != null || chatMessage.msgId != null -> itemView.setBackgroundResource(R.color.chatMessageNotice)
                     wasMentioned -> itemView.setBackgroundResource(R.color.chatMessageMention)
+                    svagaContext?.enableZebraStripes == true && svagaContext.rowPosition % 2 == 1 -> {
+                        itemView.setBackgroundColor(if (isLightTheme) 0x0A000000 else 0x10FFFFFF)
+                    }
                     else -> itemView.setBackgroundResource(0)
                 }
             }

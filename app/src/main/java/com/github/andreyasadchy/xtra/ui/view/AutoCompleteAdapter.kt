@@ -7,6 +7,7 @@ import android.widget.ArrayAdapter
 import android.widget.Filter
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.view.isVisible
 import coil3.imageLoader
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
@@ -17,18 +18,20 @@ import com.github.andreyasadchy.xtra.BuildConfig
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.chat.Chatter
 import com.github.andreyasadchy.xtra.model.chat.Emote
+import com.github.andreyasadchy.xtra.ui.chat.EmotePickerSearch
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.visible
 import java.util.Collections
-import java.util.regex.Pattern
 
 class AutoCompleteAdapter<T>(
     context: Context,
     resource: Int,
     textViewResourceId: Int,
-    objects: MutableList<T?>
-): ArrayAdapter<T?>(context, resource, textViewResourceId) {
+    objects: MutableList<T?>,
+    private val favoritesProvider: (() -> Set<String>)? = null,
+    private val aliasLookup: ((String?) -> String?)? = null,
+) : ArrayAdapter<T?>(context, resource, textViewResourceId) {
 
     // ViewModel producers synchronize on this shared source list too.
     private val mLock = objects
@@ -40,9 +43,13 @@ class AutoCompleteAdapter<T>(
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
         val view = super.getView(position, convertView, parent)
         val item = getItem(position)
+        val imageView = view.findViewById<ImageView>(R.id.image)
+        val nameView = view.findViewById<TextView>(R.id.name)
+        val providerTag = view.findViewById<TextView>(R.id.providerTag)
+
         when (item) {
             is Emote -> {
-                view.findViewById<ImageView>(R.id.image)?.let {
+                imageView?.let {
                     it.visible()
                     context.imageLoader.enqueue(
                         ImageRequest.Builder(context).apply {
@@ -64,9 +71,30 @@ class AutoCompleteAdapter<T>(
                         }.build()
                     )
                 }
-                view.findViewById<TextView>(R.id.name)?.text = item.name
+                nameView?.text = item.name
+                providerTag?.apply {
+                    text = EmotePickerSearch.providerLabel(item)
+                    isVisible = true
+                }
             }
-            is Chatter -> view.findViewById<TextView>(R.id.name)?.text = item.name
+            is Chatter -> {
+                imageView?.isVisible = false
+                val alias = item.alias ?: aliasLookup?.invoke(item.login ?: item.name?.lowercase())
+                if (!alias.isNullOrBlank()) {
+                    nameView?.text = "$alias (@${item.name})"
+                    providerTag?.apply {
+                        text = "Свага+"
+                        isVisible = true
+                    }
+                } else {
+                    nameView?.text = "@${item.name}"
+                    providerTag?.isVisible = false
+                }
+            }
+            else -> {
+                imageView?.isVisible = false
+                providerTag?.isVisible = false
+            }
         }
         return view
     }
@@ -74,23 +102,23 @@ class AutoCompleteAdapter<T>(
     override fun getFilter(): Filter = filter
 
     private val filter: Filter = object : Filter() {
-        override fun performFiltering(constraint: CharSequence?): FilterResults? {
-            return if (constraint.isNullOrBlank()) {
-                FilterResults()
-            } else {
-                val list = synchronized(mLock) {
-                    (mOriginalValues ?: mObjects.also { mOriginalValues = it }).toList()
-                }
-                val regex = constraint.map {
-                    "${Pattern.quote(it.lowercase())}\\S*?"
-                }.joinToString("").toRegex()
-                val results = list.filter {
-                    regex.matches(it.toString().lowercase())
-                }
-                FilterResults().apply {
-                    values = results
-                    count = results.size
-                }
+        override fun performFiltering(constraint: CharSequence?): FilterResults {
+            if (constraint.isNullOrBlank()) {
+                return FilterResults()
+            }
+            val list = synchronized(mLock) {
+                (mOriginalValues ?: mObjects.also { mOriginalValues = it }).toList()
+            }
+            val favs = favoritesProvider?.invoke().orEmpty()
+            val results = EmotePickerSearch.filterAutoCompleteItems(
+                items = list,
+                rawConstraint = constraint,
+                favorites = favs,
+                aliasLookup = aliasLookup,
+            )
+            return FilterResults().apply {
+                values = results.toMutableList()
+                count = results.size
             }
         }
 
@@ -182,16 +210,14 @@ class AutoCompleteAdapter<T>(
         if (mNotifyOnChange) notifyDataSetChanged()
     }
 
-    override fun notifyDataSetChanged() {
-        super.notifyDataSetChanged()
-        mNotifyOnChange = true
-    }
-
     override fun setNotifyOnChange(notifyOnChange: Boolean) {
+        super.setNotifyOnChange(notifyOnChange)
         mNotifyOnChange = notifyOnChange
     }
 
-    override fun getCount(): Int = mObjects.size
+    override fun getCount(): Int = synchronized(mLock) { mObjects.size }
 
-    override fun getItem(position: Int): T? = mObjects[position]
+    override fun getItem(position: Int): T? = synchronized(mLock) { mObjects.getOrNull(position) }
+
+    override fun getPosition(item: T?): Int = synchronized(mLock) { mObjects.indexOf(item) }
 }

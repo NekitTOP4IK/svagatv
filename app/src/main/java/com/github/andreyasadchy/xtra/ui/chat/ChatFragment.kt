@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.text.format.DateUtils
 import android.util.TypedValue
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -29,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.adapter.FragmentStateAdapter
@@ -43,12 +45,14 @@ import com.github.andreyasadchy.xtra.databinding.FragmentChatBinding
 import com.github.andreyasadchy.xtra.model.chat.ChatMessage
 import com.github.andreyasadchy.xtra.model.chat.Emote
 import com.github.andreyasadchy.xtra.model.ui.Stream
+import com.github.andreyasadchy.xtra.svagaplus.SvagaRepository
 import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.common.BaseNetworkFragment
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
 import com.github.andreyasadchy.xtra.ui.view.AutoCompleteAdapter
+import com.github.andreyasadchy.xtra.ui.view.GridAutofitLayoutManager
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
@@ -77,6 +81,8 @@ import kotlin.math.roundToInt
 class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickListener, ReplyClickedDialog.OnButtonClickListener {
 
     @Inject lateinit var rewardSessions: ChannelPointRewardsSessionProvider
+    @Inject lateinit var svagaRepository: SvagaRepository
+    @Inject lateinit var favoriteEmotesManager: FavoriteEmotesManager
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
@@ -216,7 +222,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         messageClickListener = { channelId ->
                             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
                             editText.clearFocus()
-                            MessageClickedDialog.newInstance(enableMessaging, channelId).show(this@ChatFragment.childFragmentManager, "messageDialog")
+                            MessageClickedDialog.newInstance(enableMessaging, channelId, channelLogin).show(this@ChatFragment.childFragmentManager, "messageDialog")
                         },
                         replyClickListener = {
                             (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
@@ -228,6 +234,17 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             editText.clearFocus()
                             ImageClickedDialog.newInstance(url, name, format, isAnimated, source, thirdParty, emoteId).show(this@ChatFragment.childFragmentManager, "imageDialog")
                         },
+                        channelLogin = channelLogin,
+                        svagaRepository = svagaRepository,
+                        svagaBadgeClickListener = { badge ->
+                            (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(editText.windowToken, 0)
+                            editText.clearFocus()
+                            if (!childFragmentManager.isStateSaved && childFragmentManager.findFragmentByTag(SvagaBadgeCardDialog.TAG) == null) {
+                                SvagaBadgeCardDialog.newInstance(badge.page, badge.title, badge.url, badge.rarity)
+                                    .show(this@ChatFragment.childFragmentManager, SvagaBadgeCardDialog.TAG)
+                            }
+                        },
+                        enableZebraStripes = requireContext().prefs().getBoolean(C.CHAT_ZEBRA_STRIPES, false),
                     ).apply {
                         useDarkOverlay = isFloatingMode
                     }
@@ -294,6 +311,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             R.layout.auto_complete_emotes_list_item,
                             R.id.name,
                             viewModel.autoCompleteList,
+                            favoritesProvider = { favoriteEmotesManager.favorites.value },
+                            aliasLookup = { login -> svagaRepository.aliasManager.getAlias(login) },
                         ).apply {
                             setNotifyOnChange(false)
                             editText.setAdapter(this)
@@ -341,8 +360,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         } else {
                             messageView.visibility = View.VISIBLE
                         }
+                        if (requireContext().prefs().getBoolean(C.CHAT_SWIPE_TO_REPLY, true)) {
+                            attachSwipeToReply(recyclerView)
+                        }
                         viewPager.adapter = object : FragmentStateAdapter(this@ChatFragment) {
-                            override fun getItemCount(): Int = 3
+                            override fun getItemCount(): Int = EmotesFragment.TAB_COUNT
 
                             override fun createFragment(position: Int): Fragment {
                                 return EmotesFragment.newInstance(position)
@@ -352,16 +374,19 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         viewPager.reduceDragSensitivity()
                         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
                             tab.text = when (position) {
-                                0 -> getString(R.string.recent_emotes)
-                                1 -> "Twitch"
-                                else -> "7TV/BTTV/FFZ"
+                                EmotesFragment.TAB_RECENT -> getString(R.string.recent_emotes)
+                                EmotesFragment.TAB_FAVORITES -> "★ ${getString(R.string.favorite_emotes)}"
+                                EmotesFragment.TAB_CHANNEL_STV -> "7TV"
+                                EmotesFragment.TAB_CHANNEL_BTTV_FFZ -> "BTTV/FFZ"
+                                EmotesFragment.TAB_TWITCH -> "Twitch"
+                                else -> getString(R.string.global_emotes)
                             }
                         }.attach()
+                        setupEmotePickerSearch()
                         emotes.setOnClickListener {
-                            //TODO add animation
                             if (emoteMenu.isGone) {
-                                if (!hasRecentEmotes && viewPager.currentItem == 0) {
-                                    viewPager.setCurrentItem(1, false)
+                                if (!hasRecentEmotes && favoriteEmotesManager.favorites.value.isEmpty() && viewPager.currentItem == EmotesFragment.TAB_RECENT) {
+                                    viewPager.setCurrentItem(EmotesFragment.TAB_CHANNEL_STV, false)
                                 }
                                 toggleEmoteMenu(true)
                             } else {
@@ -634,6 +659,25 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                         }
                     }
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.updateLoginMessages.collectLatest { targetLogin ->
+                                adapter?.let { chatAdapter ->
+                                    synchronized(viewModel.chatMessages) {
+                                        viewModel.chatMessages.mapIndexedNotNull { index, message ->
+                                            if (message.userLogin?.equals(targetLogin, ignoreCase = true) == true ||
+                                                message.reply?.userLogin?.equals(targetLogin, ignoreCase = true) == true
+                                            ) {
+                                                index
+                                            } else null
+                                        }
+                                    }.forEach {
+                                        chatAdapter.notifyItemChanged(it)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (requireContext().prefs().getBoolean(C.CHAT_TRANSLATE, false) && channelId != null && Build.SUPPORTED_64_BIT_ABIS.firstOrNull() == "arm64-v8a") {
                         viewLifecycleOwner.lifecycleScope.launch {
                             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -850,6 +894,137 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     fun appendEmote(emote: Emote) {
         binding.editText.text.append(emote.name).append(' ')
+    }
+
+    fun onEmoteLongPressed(emote: Emote) {
+        if (!childFragmentManager.isStateSaved) {
+            ImageClickedDialog.newInstance(
+                url = emote.url4x ?: emote.url3x ?: emote.url2x ?: emote.url1x,
+                name = emote.name,
+                format = emote.format,
+                isAnimated = emote.isAnimated,
+                source = emote.source,
+                thirdParty = emote.thirdParty,
+                emoteId = null,
+                isOverlay = emote.isOverlayEmote,
+                canFavorite = true,
+            ).show(childFragmentManager, "imageDialog")
+        }
+    }
+
+    private fun setupEmotePickerSearch() {
+        with(binding) {
+            val emoteQuality = requireContext().prefs().getString(C.CHAT_IMAGE_QUALITY, "4") ?: "4"
+            val searchAdapter = EmotesAdapter(
+                fragment = this@ChatFragment,
+                clickListener = { appendEmote(it) },
+                emoteQuality = emoteQuality,
+                longClickListener = { onEmoteLongPressed(it) },
+            )
+            val columnWidth = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 50f, resources.displayMetrics).toInt()
+            emoteSearchRecycler.itemAnimator = null
+            emoteSearchRecycler.layoutManager = GridAutofitLayoutManager(requireContext(), columnWidth)
+            emoteSearchRecycler.adapter = searchAdapter
+
+            emoteSearchClear.setOnClickListener {
+                emoteSearchInput.text?.clear()
+            }
+
+            emoteSearchInput.addTextChangedListener(onTextChanged = { text, _, _, _ ->
+                val query = text?.toString()?.trim().orEmpty()
+                emoteSearchClear.isVisible = query.isNotEmpty()
+                if (query.isEmpty()) {
+                    emoteSearchRecycler.visibility = View.GONE
+                    tabLayout.visibility = View.VISIBLE
+                    viewPager.visibility = View.VISIBLE
+                } else {
+                    tabLayout.visibility = View.GONE
+                    viewPager.visibility = View.GONE
+                    emoteSearchRecycler.visibility = View.VISIBLE
+                    val personal = viewModel.userStvEmoteSetId?.let { setId ->
+                        synchronized(viewModel.personalEmoteSets) {
+                            viewModel.personalEmoteSets[setId]
+                        }
+                    } ?: emptyList()
+                    val twitch = synchronized(viewModel.userEmotes) { viewModel.userEmotes.toList() }
+                    val thirdParty = synchronized(viewModel.thirdPartyEmotes) { viewModel.thirdPartyEmotes.toList() }
+                    val results = EmotePickerSearch.filterEmotes(
+                        emotes = personal + thirdParty + twitch,
+                        rawQuery = query,
+                        favorites = favoriteEmotesManager.favorites.value,
+                    )
+                    searchAdapter.submitList(results)
+                }
+            })
+        }
+    }
+
+    private fun attachSwipeToReply(targetRecyclerView: RecyclerView) {
+        val maxSwipePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 60f, resources.displayMetrics)
+        val triggerSwipePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 42f, resources.displayMetrics)
+
+        val callback = object : ItemTouchHelper.Callback() {
+            private var armedHolder: RecyclerView.ViewHolder? = null
+            private var hapticFired = false
+
+            override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+                if (pipMode) return 0
+                val pos = viewHolder.bindingAdapterPosition
+                if (pos == RecyclerView.NO_POSITION) return 0
+                val msg = adapter?.getMessageAt(pos) ?: return 0
+                val canReply = !msg.isReply && !msg.id.isNullOrBlank() && !msg.userLogin.isNullOrBlank() && !msg.message.isNullOrBlank()
+                return if (canReply) makeMovementFlags(0, ItemTouchHelper.LEFT) else 0
+            }
+
+            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean = false
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float = 2.0f
+
+            override fun getSwipeEscapeVelocity(defaultValue: Float): Float = Float.MAX_VALUE
+
+            override fun onChildDraw(
+                c: android.graphics.Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean,
+            ) {
+                val clampedDx = dX.coerceIn(-maxSwipePx, 0f)
+                if (isCurrentlyActive) {
+                    if (-clampedDx >= triggerSwipePx) {
+                        armedHolder = viewHolder
+                        if (!hapticFired) {
+                            hapticFired = true
+                            viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        }
+                    } else if (-clampedDx < triggerSwipePx * 0.7f) {
+                        armedHolder = null
+                        hapticFired = false
+                    }
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, clampedDx, dY, actionState, isCurrentlyActive)
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                val shouldReply = armedHolder === viewHolder
+                armedHolder = null
+                hapticFired = false
+                if (shouldReply) {
+                    val pos = viewHolder.bindingAdapterPosition
+                    if (pos != RecyclerView.NO_POSITION) {
+                        adapter?.getMessageAt(pos)?.let { msg ->
+                            onReplyClicked(msg.id, msg.userLogin, msg.userName, msg.message)
+                        }
+                    }
+                }
+            }
+        }
+        ItemTouchHelper(callback).attachToRecyclerView(targetRecyclerView)
     }
 
     /**

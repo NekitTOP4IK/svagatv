@@ -35,15 +35,19 @@ class NamePaintSpan(
 
     override fun draw(canvas: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
         val yOffset = y.toFloat()
+        val prevShader = paint.shader
+        val prevColor = paint.color
+        paint.shader = null
         shadows?.forEach {
-            paint.setShadowLayer(it.radius, it.xOffset, it.yOffset, it.color)
+            val safeRadius = it.radius.coerceIn(0.5f, 24f)
+            paint.setShadowLayer(safeRadius, it.xOffset, it.yOffset, it.color)
             canvas.drawText(name, x, yOffset, paint)
         }
         paint.clearShadowLayer()
         when (type) {
             "LINEAR_GRADIENT" -> {
-                val width = paint.measureText(name)
-                val height = (bottom - top).toFloat()
+                val width = max(1f, paint.measureText(name))
+                val height = max(1f, (bottom - top).toFloat())
                 val topFloat = top.toFloat()
                 val points = floatArrayOf(x, topFloat, x + width, topFloat)
                 val matrix = Matrix()
@@ -64,8 +68,8 @@ class NamePaintSpan(
                 )
             }
             "RADIAL_GRADIENT" -> {
-                val halfWidth = paint.measureText(name) / 2
-                val height = (bottom - top).toFloat()
+                val halfWidth = max(1f, paint.measureText(name) / 2f)
+                val height = max(1f, (bottom - top).toFloat())
                 paint.shader = RadialGradient(
                     x + halfWidth,
                     top + (height / 2),
@@ -81,5 +85,7 @@ class NamePaintSpan(
             }
         }
         canvas.drawText(name, x, yOffset, paint)
+        paint.shader = prevShader
+        paint.color = prevColor
     }
 }

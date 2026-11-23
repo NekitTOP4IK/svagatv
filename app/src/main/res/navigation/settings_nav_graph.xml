@@ -33,6 +33,13 @@
         android:id="@+id/action_global_chatSettingsFragment"
         app:destination="@id/chatSettingsFragment" />
     <fragment
+        android:id="@+id/svagaSettingsFragment"
+        android:name="com.github.andreyasadchy.xtra.ui.settings.SvagaSettingsFragment"
+        android:label="@string/svaga_settings" />
+    <action
+        android:id="@+id/action_global_svagaSettingsFragment"
+        app:destination="@id/svagaSettingsFragment" />
+    <fragment
         android:id="@+id/playerSettingsFragment"
         android:name="com.github.andreyasadchy.xtra.ui.settings.SettingsActivity$PlayerSettingsFragment"
         android:label="@string/player_settings" />

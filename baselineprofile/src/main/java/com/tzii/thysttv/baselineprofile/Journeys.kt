@@ -4,7 +4,7 @@ import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 
-internal const val TARGET_PACKAGE = "com.tzii.thysttv.benchmark"
+internal const val TARGET_PACKAGE = "com.olesha.entertainment.svagatv.benchmark"
 private const val TIMEOUT_MS = 10_000L
 
 /** Stable resource IDs keep this independent of language and network content. */

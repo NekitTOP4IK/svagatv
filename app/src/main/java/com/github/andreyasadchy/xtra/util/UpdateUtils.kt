@@ -10,8 +10,8 @@ import kotlinx.serialization.json.jsonPrimitive
 
 object UpdateUtils {
 
-    const val DEFAULT_RELEASE_API_URL = "https://api.github.com/repos/tzii/ThystTV/releases/latest"
-    const val DEFAULT_RELEASES_API_URL = "https://api.github.com/repos/tzii/ThystTV/releases"
+    const val DEFAULT_RELEASE_API_URL = "https://api.github.com/repos/olesha-entertainment/SvagaTV/releases/latest"
+    const val DEFAULT_RELEASES_API_URL = "https://api.github.com/repos/olesha-entertainment/SvagaTV/releases"
     private const val LEGACY_XTRA_RELEASE_API_URL = "https://api.github.com/repos/crackededed/xtra/releases/tags/latest"
     private val markdownLink = Regex("""\[([^\]]+)]\(([^)]+)\)""")
     private val headingPrefix = Regex("""^#{1,6}\s+""")

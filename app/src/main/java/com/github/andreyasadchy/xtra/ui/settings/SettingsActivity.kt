@@ -455,6 +455,10 @@ class SettingsActivity : AppCompatActivity() {
                 openSection(SettingsNavGraphDirections.actionGlobalChatSettingsFragment())
                 true
             }
+            findPreference<Preference>("svaga_settings")?.setOnPreferenceClickListener {
+                openSection(SettingsNavGraphDirections.actionGlobalSvagaSettingsFragment())
+                true
+            }
             findPreference<Preference>("player_settings")?.setOnPreferenceClickListener {
                 openSection(SettingsNavGraphDirections.actionGlobalPlayerSettingsFragment())
                 true

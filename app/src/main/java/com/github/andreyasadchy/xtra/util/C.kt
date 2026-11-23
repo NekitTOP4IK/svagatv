@@ -334,4 +334,12 @@ object C {
     const val ENABLE_INTEGRITY = "enable_integrity"
     const val USE_WEBVIEW_INTEGRITY = "use_webview_integrity"
     const val GET_ALL_GQL_HEADERS = "get_all_gql_headers"
+    const val CHAT_ZEBRA_STRIPES = "chat_zebra_stripes"
+    const val CHAT_SWIPE_TO_REPLY = "chat_swipe_to_reply"
+    const val FAVORITE_EMOTES_SET = "favorite_emotes_set"
+    const val SVAGA_BADGES_ENABLED = "svaga_badges_enabled"
+    const val SVAGA_STYLES_ENABLED = "svaga_styles_enabled"
+    const val SVAGA_SOCIAL_RATING_ENABLED = "svaga_social_rating_enabled"
+    const val SVAGA_ALIASES_ENABLED = "svaga_aliases_enabled"
+    const val SVAGA_BACKEND_URL = "svaga_backend_url"
 }
